@@ -24,6 +24,15 @@ import {
   EarningsSummary,
 } from './src/store/useEarningsStore';
 import { usePortfolioStore } from './src/store/usePortfolioStore';
+import { useAuthStore } from './src/store/useAuthStore';
+import AuthScreen from './src/screens/AuthScreen';
+import { ActivityIndicator } from 'react-native';
+import {
+  registerForPushNotifications,
+  scheduleDailyBriefing,
+  sendLocalNotification,
+  addNotificationResponseListener,
+} from './src/services/notifications';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -337,7 +346,19 @@ function PortfolioScreen({ navigation }: { navigation: any }) {
     <SafeAreaView style={s.container}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
-          <Text style={s.headerDate}>내 투자</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={s.headerDate}>내 투자</Text>
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
+                  { text: '취소', style: 'cancel' },
+                  { text: '로그아웃', style: 'destructive', onPress: () => useAuthStore.getState().signOut() },
+                ]);
+              }}
+            >
+              <Ionicons name="log-out-outline" size={22} color={C.gray2} />
+            </TouchableOpacity>
+          </View>
           <Text style={s.headerTitle}>포트폴리오</Text>
         </View>
 
@@ -628,6 +649,60 @@ function MainTabs() {
 
 // 스택 네비게이터 (메인탭 + 상세화면)
 export default function App() {
+  const { user, isLoading, checkSession, signOut } = useAuthStore();
+
+  // 앱 시작 시 세션 확인
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
+  // 로그인 후 푸시 알림 설정
+  useEffect(() => {
+    if (!user) return;
+
+    // 푸시 권한 요청 + 매일 브리핑 알림 스케줄
+    registerForPushNotifications().then((token) => {
+      if (token) {
+        scheduleDailyBriefing();
+        // 로그인 환영 알림 (첫 1회)
+        sendLocalNotification(
+          'Stock AI에 오신 것을 환영합니다!',
+          '매일 아침 6:30에 AI 실적 브리핑을 보내드릴게요.'
+        );
+      }
+    });
+
+    // 알림 터치 시 처리
+    const subscription = addNotificationResponseListener((response) => {
+      const screen = response.notification.request.content.data?.screen;
+      // 나중에 navigation으로 특정 화면 이동 가능
+      console.log('알림 터치:', screen);
+    });
+
+    return () => subscription.remove();
+  }, [user]);
+
+  // 로딩 중
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0E1A', justifyContent: 'center', alignItems: 'center' }}>
+        <StatusBar style="light" />
+        <ActivityIndicator size="large" color="#00D959" />
+      </View>
+    );
+  }
+
+  // 로그인 안 됨 → 로그인 화면
+  if (!user) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <AuthScreen />
+      </>
+    );
+  }
+
+  // 로그인 됨 → 메인 앱
   return (
     <>
       <StatusBar style="light" />
