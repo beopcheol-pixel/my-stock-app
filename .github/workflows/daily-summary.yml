@@ -1,0 +1,36 @@
+name: Daily US Stocks AI Summary
+
+on:
+  schedule:
+    # 매일 KST 오전 6시 실행 (UTC 21시)
+    # 미국 장 마감(EST 16:00) = KST 06:00 → 실적 반영 후 요약
+    - cron: '0 21 * * 1-5'  # 월~금만 (주말 제외)
+  workflow_dispatch: # 수동 실행 버튼 (테스트용)
+
+jobs:
+  run-ai-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        run: |
+          cd scripts
+          npm init -y
+          npm install @supabase/supabase-js openai
+
+      - name: Run AI Summary Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: node scripts/runSummary.js
